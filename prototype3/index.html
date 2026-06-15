@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#111;display:flex;flex-direction:column;align-items:center;padding:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;}
+#toolbar{width:100%;max-width:500px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+#frame-label{color:#777;font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tbtn{background:#222;color:#888;border:1px solid #333;padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;}
+.tbtn:hover{background:#2a2a2a;color:#fff;}
+.tbtn.on{background:#1a3a5c;color:#7cb8ff;border-color:#2a5a8c;}
+#bc{width:100%;max-width:500px;display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-bottom:8px;min-height:14px;font-size:10px;}
+.crumb{color:#444;cursor:pointer;}.crumb:hover{color:#999;}.crumb.cur{color:#ccc;}
+.sep{color:#333;}
+#device-wrap{transform-origin:top center;position:relative;}
+#device{position:relative;background:#000;overflow:hidden;border-radius:44px;box-shadow:0 0 0 2px #2a2a2a,0 20px 60px rgba(0,0,0,0.8);}
+.screen{display:none;position:absolute;inset:0;width:100%;height:100%;}
+.screen.active{display:block;}
+.screen img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block;pointer-events:none;user-select:none;-webkit-user-drag:none;}
+.hs{position:absolute;cursor:pointer;z-index:10;border-radius:4px;-webkit-tap-highlight-color:transparent;}
+.hs:active{background:rgba(255,255,255,0.08);}
+.hs.toggle{z-index:11;}
+.hs.toggle[data-toggled="true"]{background:rgba(0,180,100,0.12);outline:2px solid rgba(0,180,100,0.4);}
+body.debug .hs{background:rgba(80,180,255,0.15);outline:1.5px solid rgba(80,180,255,0.55);}
+body.debug .hs.toggle{background:rgba(255,180,0,0.15);outline:1.5px solid rgba(255,180,0,0.55);}
+body.debug .hs:hover{background:rgba(80,180,255,0.3);outline:2px solid rgba(80,180,255,0.9);}
+body.debug .hs.toggle:hover{background:rgba(255,180,0,0.3);outline:2px solid rgba(255,180,0,0.9);}
+body.debug .hs:hover::after,body.debug .hs.toggle:hover::after{content:attr(data-element);position:absolute;bottom:100%;left:0;background:rgba(0,0,0,0.85);font-size:8px;padding:2px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:99;}
+body.debug .hs:hover::after{color:#7cb8ff;}
+body.debug .hs.toggle:hover::after{color:#ffb300;}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#fff;padding:6px 16px;border-radius:16px;font-size:11px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:9999;white-space:nowrap;}
+#toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="frame-label">Loading...</span>
+  <div style="display:flex;gap:5px;">
+    <button class="tbtn on" id="dbgBtn" onclick="toggleDebug()">Hide Hotspots</button>
+    <button class="tbtn" onclick="goBack()">Back</button>
+    <button class="tbtn" onclick="restart()">Restart</button>
+  </div>
+</div>
+<div id="bc"></div>
+<div id="device-wrap"><div id="device">
+  <div id="s1_2329" class="screen " data-id="1:2329" data-w="393" data-h="852" >
+    <img src="images/frame_1_2329.png" alt="01_Premium_Monthly-unchecked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2571')" data-dest="1:2571" data-element="checkbox" title="checkbox -> 01_Premium_Monthly-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs" onclick="go('1:2450')" data-dest="1:2450" data-element="button-filled" title="button-filled -> 01_Premium_Monthly-unchecked-error" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_2450" class="screen " data-id="1:2450" data-w="393" data-h="852" >
+    <img src="images/frame_1_2450.png" alt="01_Premium_Monthly-unchecked-error" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2571')" data-dest="1:2571" data-element="checkbox" title="checkbox -> 01_Premium_Monthly-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_2571" class="screen " data-id="1:2571" data-w="393" data-h="852" >
+    <img src="images/frame_1_2571.png" alt="01_Premium_Monthly-checked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3418')" data-dest="1:3418" data-element="button-loud" title="button-loud -> Create Account - default" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_2692" class="screen " data-id="1:2692" data-w="393" data-h="852" >
+    <img src="images/frame_1_2692.png" alt="02_Premium_Annual-unchecked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2934')" data-dest="1:2934" data-element="checkbox" title="checkbox -> 02_Premium_Annual-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs" onclick="go('1:2813')" data-dest="1:2813" data-element="button-filled" title="button-filled -> 02_Premium_Annual-unchecked-error" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_2813" class="screen " data-id="1:2813" data-w="393" data-h="852" >
+    <img src="images/frame_1_2813.png" alt="02_Premium_Annual-unchecked-error" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2934')" data-dest="1:2934" data-element="checkbox" title="checkbox -> 02_Premium_Annual-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_2934" class="screen " data-id="1:2934" data-w="393" data-h="852" >
+    <img src="images/frame_1_2934.png" alt="02_Premium_Annual-checked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3055')" data-dest="1:3055" data-element="checkbox-plan-cards" title="checkbox-plan-cards -> 03_Max_Annual-unchecked" style="left:52px;top:650px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3419')" data-dest="1:3419" data-element="button-loud" title="button-loud -> Create Account - default" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3055" class="screen " data-id="1:3055" data-w="393" data-h="852" >
+    <img src="images/frame_1_3055.png" alt="03_Max_Annual-unchecked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3297')" data-dest="1:3297" data-element="checkbox" title="checkbox -> 03_Max_Annual-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs" onclick="go('1:3176')" data-dest="1:3176" data-element="button-filled" title="button-filled -> 03_Max_Annual-unchecked-error" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3176" class="screen " data-id="1:3176" data-w="393" data-h="852" >
+    <img src="images/frame_1_3176.png" alt="03_Max_Annual-unchecked-error" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3297')" data-dest="1:3297" data-element="checkbox" title="checkbox -> 03_Max_Annual-checked" style="left:36px;top:730px;width:25px;height:25px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3297" class="screen " data-id="1:3297" data-w="393" data-h="852" >
+    <img src="images/frame_1_3297.png" alt="03_Max_Annual-checked" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:37px;width:32px;height:32px;"></div>
+    <div class="hs" onclick="go('1:2329')" data-dest="1:2329" data-element="value" title="value -> 01_Premium_Monthly-unchecked" style="left:52px;top:333px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="value" title="value -> 02_Premium_Annual-unchecked" style="left:52px;top:390px;width:288px;height:47px;"></div>
+    <div class="hs" onclick="go('1:3420')" data-dest="1:3420" data-element="button-loud" title="button-loud -> Create Account - default" style="left:36px;top:792px;width:322px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:36px;top:730px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3418" class="screen " data-id="1:3418" data-w="393" data-h="852" >
+    <img src="images/frame_1_3418.png" alt="Create Account - default" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3421')" data-dest="1:3421" data-element="login-button" title="login-button -> 07_Plans-Monthly Selected" style="left:40px;top:704px;width:313px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home-free" style="left:0px;top:0px;width:71px;height:77px;"></div>
+  </div>
+  <div id="s1_3419" class="screen " data-id="1:3419" data-w="393" data-h="852" >
+    <img src="images/frame_1_3419.png" alt="Create Account - default" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3549')" data-dest="1:3549" data-element="login-button" title="login-button -> 07_Plans-Monthly Selected" style="left:40px;top:704px;width:313px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home-free" style="left:0px;top:0px;width:71px;height:77px;"></div>
+  </div>
+  <div id="s1_3420" class="screen " data-id="1:3420" data-w="393" data-h="852" >
+    <img src="images/frame_1_3420.png" alt="Create Account - default" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3678')" data-dest="1:3678" data-element="login-button" title="login-button -> 07_Plans-Monthly Selected" style="left:40px;top:704px;width:313px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home-free" style="left:0px;top:0px;width:71px;height:77px;"></div>
+  </div>
+  <div id="s1_3421" class="screen " data-id="1:3421" data-w="393" data-h="852" >
+    <img src="images/frame_1_3421.png" alt="07_Plans-Monthly Selected" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3822')" data-dest="1:3822" data-element="image 6" title="image 6 -> Onboarding-upsell-default" style="left:0px;top:0px;width:393px;height:852px;"></div>
+  </div>
+  <div id="s1_3549" class="screen " data-id="1:3549" data-w="393" data-h="852" >
+    <img src="images/frame_1_3549.png" alt="07_Plans-Monthly Selected" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3955')" data-dest="1:3955" data-element="image 6" title="image 6 -> Assessments Upsell-paid" style="left:0px;top:0px;width:393px;height:852px;"></div>
+  </div>
+  <div id="s1_3678" class="screen " data-id="1:3678" data-w="393" data-h="852" >
+    <img src="images/frame_1_3678.png" alt="07_Plans-Monthly Selected" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3814')" data-dest="1:3814" data-element="image 7" title="image 7 -> 10_Survey" style="left:0px;top:0px;width:393px;height:852px;"></div>
+  </div>
+  <div id="s1_3810" class="screen " data-id="1:3810" data-w="394" data-h="852" >
+    <img src="images/frame_1_3810.png" alt="10_Survey" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3818')" data-dest="1:3818" data-element="Frame 30081" title="Frame 30081 -> 12_Welcome-free" style="left:61px;top:672px;width:271px;height:53px;"></div>
+    <div class="hs" onclick="go('1:3818')" data-dest="1:3818" data-element="Frame 30088" title="Frame 30088 -> 12_Welcome-free" style="left:128px;top:746px;width:134px;height:35px;"></div>
+  </div>
+  <div id="s1_3814" class="screen " data-id="1:3814" data-w="394" data-h="852" >
+    <img src="images/frame_1_3814.png" alt="10_Survey" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3820')" data-dest="1:3820" data-element="Frame 30081" title="Frame 30081 -> 12_Welcome-premium-max" style="left:61px;top:672px;width:271px;height:53px;"></div>
+    <div class="hs" onclick="go('1:3820')" data-dest="1:3820" data-element="Frame 30088" title="Frame 30088 -> 12_Welcome-premium-max" style="left:128px;top:746px;width:134px;height:35px;"></div>
+  </div>
+  <div id="s1_3818" class="screen " data-id="1:3818" data-w="394" data-h="852" data-auto="1:4088" data-ms="2000">
+    <img src="images/frame_1_3818.png" alt="12_Welcome-free" draggable="false" loading="lazy" />
+  </div>
+  <div id="s1_3820" class="screen " data-id="1:3820" data-w="394" data-h="852" data-auto="1:4380" data-ms="2000">
+    <img src="images/frame_1_3820.png" alt="12_Welcome-premium-max" draggable="false" loading="lazy" />
+  </div>
+  <div id="s1_3822" class="screen " data-id="1:3822" data-w="393" data-h="852" >
+    <img src="images/frame_1_3822.png" alt="Onboarding-upsell-default" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3810')" data-dest="1:3810" data-element="button-text" title="button-text -> 10_Survey" style="left:81px;top:693px;width:222px;height:44px;"></div>
+    <div class="hs" onclick="go('1:3882')" data-dest="1:3882" data-element="button-loud" title="button-loud -> Assessments Upsell-free" style="left:56px;top:628px;width:280px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home-free" style="left:0px;top:18px;width:71px;height:53px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:46px;top:524px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3882" class="screen " data-id="1:3882" data-w="393" data-h="852" >
+    <img src="images/frame_1_3882.png" alt="Assessments Upsell-free" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home-free" style="left:0px;top:0px;width:71px;height:77px;"></div>
+    <div class="hs" onclick="go('1:4028')" data-dest="1:4028" data-element="button-loud" title="button-loud -> 11_Assessment Center -welcome" style="left:56px;top:716px;width:280px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:40px;top:669px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_3955" class="screen " data-id="1:3955" data-w="393" data-h="852" >
+    <img src="images/frame_1_3955.png" alt="Assessments Upsell-paid" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4380')" data-dest="1:4380" data-element="button-placement-parent-top-left" title="button-placement-parent-top-left -> student-home" style="left:0px;top:0px;width:71px;height:77px;"></div>
+    <div class="hs" onclick="go('1:4058')" data-dest="1:4058" data-element="button-loud" title="button-loud -> 11_Assessment Center -welcome" style="left:56px;top:716px;width:280px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element="checkbox" data-toggled="false" title="checkbox (toggle)" style="left:40px;top:669px;width:25px;height:25px;"></div>
+  </div>
+  <div id="s1_4028" class="screen " data-id="1:4028" data-w="393" data-h="852" data-auto="1:3810" data-ms="2000">
+    <img src="images/frame_1_4028.png" alt="11_Assessment Center -welcome" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3818')" data-dest="1:3818" data-element="button-loud-new" title="button-loud-new -> 12_Welcome-free" style="left:60px;top:668px;width:272px;height:52px;"></div>
+  </div>
+  <div id="s1_4058" class="screen " data-id="1:4058" data-w="393" data-h="852" data-auto="1:3814" data-ms="2000">
+    <img src="images/frame_1_4058.png" alt="11_Assessment Center -welcome" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:3818')" data-dest="1:3818" data-element="button-loud-new" title="button-loud-new -> 12_Welcome-free" style="left:60px;top:668px;width:272px;height:52px;"></div>
+  </div>
+  <div id="s1_4088" class="screen " data-id="1:4088" data-w="852" data-h="393" >
+    <img src="images/frame_1_4088.png" alt="student-home-free" draggable="false" loading="lazy" />
+  </div>
+  <div id="s1_4193" class="screen " data-id="1:4193" data-w="393" data-h="852" >
+    <img src="images/frame_1_4193.png" alt="03_Age Selection-selected" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:4320')" data-dest="1:4320" data-element="button-loud-new" title="button-loud-new -> 04_Benefits" style="left:62px;top:703px;width:272px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-2" data-toggled="false" title=".button-onboarding-2 (toggle)" style="left:64px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-3" data-toggled="false" title=".button-onboarding-3 (toggle)" style="left:157px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-4" data-toggled="false" title=".button-onboarding-4 (toggle)" style="left:250px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-5" data-toggled="false" title=".button-onboarding-5 (toggle)" style="left:64px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-6" data-toggled="false" title=".button-onboarding-6 (toggle)" style="left:157px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-7" data-toggled="false" title=".button-onboarding-7 (toggle)" style="left:250px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-8" data-toggled="false" title=".button-onboarding-8 (toggle)" style="left:110px;top:604px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-8" data-toggled="false" title=".button-onboarding-8 (toggle)" style="left:203px;top:604px;width:80px;height:80px;"></div>
+  </div>
+  <div id="s1_4307" class="screen active" data-id="1:4307" data-w="393" data-h="852" data-auto="1:4313" data-ms="3000">
+    <img src="images/frame_1_4307.png" alt="01_Static splash-universal Version 5" draggable="false" loading="lazy" />
+  </div>
+  <div id="s1_4313" class="screen " data-id="1:4313" data-w="393" data-h="852" data-auto="1:4193" data-ms="1000">
+    <img src="images/frame_1_4313.png" alt="02_Animated transition 5" draggable="false" loading="lazy" />
+  </div>
+  <div id="s1_4320" class="screen " data-id="1:4320" data-w="393" data-h="852" >
+    <img src="images/frame_1_4320.png" alt="04_Benefits" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="button-loud-new" title="button-loud-new -> 02_Premium_Annual-unchecked" style="left:43px;top:593px;width:306px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-quiet" title="button-quiet -> student-home-free" style="left:82px;top:737px;width:229px;height:42px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:40px;width:32px;height:32px;"></div>
+  </div>
+  <div id="s10_85200" class="screen " data-id="10:85200" data-w="393" data-h="852" >
+    <img src="images/frame_10_85200.png" alt="03_Age Selection-selected" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('10:85327')" data-dest="10:85327" data-element="button-loud-new" title="button-loud-new -> 04_Benefits" style="left:62px;top:703px;width:272px;height:52px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-2" data-toggled="false" title=".button-onboarding-2 (toggle)" style="left:64px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-3" data-toggled="false" title=".button-onboarding-3 (toggle)" style="left:157px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-4" data-toggled="false" title=".button-onboarding-4 (toggle)" style="left:250px;top:408px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-5" data-toggled="false" title=".button-onboarding-5 (toggle)" style="left:64px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-6" data-toggled="false" title=".button-onboarding-6 (toggle)" style="left:157px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-7" data-toggled="false" title=".button-onboarding-7 (toggle)" style="left:250px;top:506px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-8" data-toggled="false" title=".button-onboarding-8 (toggle)" style="left:110px;top:604px;width:80px;height:80px;"></div>
+    <div class="hs toggle" onclick="handleToggle(this)" data-element=".button-onboarding-8" data-toggled="false" title=".button-onboarding-8 (toggle)" style="left:203px;top:604px;width:80px;height:80px;"></div>
+  </div>
+  <div id="s10_85314" class="screen " data-id="10:85314" data-w="393" data-h="852" data-auto="10:85320" data-ms="3000">
+    <img src="images/frame_10_85314.png" alt="01_Static splash-universal Version 6" draggable="false" loading="lazy" />
+  </div>
+  <div id="s10_85320" class="screen " data-id="10:85320" data-w="393" data-h="852" data-auto="10:85200" data-ms="1000">
+    <img src="images/frame_10_85320.png" alt="02_Animated transition 6" draggable="false" loading="lazy" />
+  </div>
+  <div id="s10_85327" class="screen " data-id="10:85327" data-w="393" data-h="852" >
+    <img src="images/frame_10_85327.png" alt="04_Benefits" draggable="false" loading="lazy" />
+    <div class="hs" onclick="go('1:2692')" data-dest="1:2692" data-element="button-loud-new" title="button-loud-new -> 02_Premium_Annual-unchecked" style="left:43px;top:593px;width:306px;height:52px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-quiet" title="button-quiet -> student-home-free" style="left:82px;top:737px;width:229px;height:42px;"></div>
+    <div class="hs" onclick="go('1:4088')" data-dest="1:4088" data-element="button-flat-icon" title="button-flat-icon -> student-home-free" style="left:22px;top:40px;width:32px;height:32px;"></div>
+  </div>
+  <div id="s1_4380" class="screen " data-id="1:4380" data-w="852" data-h="393" >
+    <img src="images/frame_1_4380.png" alt="student-home" draggable="false" loading="lazy" />
+  </div></div></div>
+<div id="toast"></div>
+<script>
+const FRAMES={"1:2329": {"name": "01_Premium_Monthly-unchecked", "w": 393, "h": 852}, "1:2450": {"name": "01_Premium_Monthly-unchecked-error", "w": 393, "h": 852}, "1:2571": {"name": "01_Premium_Monthly-checked", "w": 393, "h": 852}, "1:2692": {"name": "02_Premium_Annual-unchecked", "w": 393, "h": 852}, "1:2813": {"name": "02_Premium_Annual-unchecked-error", "w": 393, "h": 852}, "1:2934": {"name": "02_Premium_Annual-checked", "w": 393, "h": 852}, "1:3055": {"name": "03_Max_Annual-unchecked", "w": 393, "h": 852}, "1:3176": {"name": "03_Max_Annual-unchecked-error", "w": 393, "h": 852}, "1:3297": {"name": "03_Max_Annual-checked", "w": 393, "h": 852}, "1:3418": {"name": "Create Account - default", "w": 393, "h": 852}, "1:3419": {"name": "Create Account - default", "w": 393, "h": 852}, "1:3420": {"name": "Create Account - default", "w": 393, "h": 852}, "1:3421": {"name": "07_Plans-Monthly Selected", "w": 393, "h": 852}, "1:3549": {"name": "07_Plans-Monthly Selected", "w": 393, "h": 852}, "1:3678": {"name": "07_Plans-Monthly Selected", "w": 393, "h": 852}, "1:3810": {"name": "10_Survey", "w": 394, "h": 852}, "1:3814": {"name": "10_Survey", "w": 394, "h": 852}, "1:3818": {"name": "12_Welcome-free", "w": 394, "h": 852}, "1:3820": {"name": "12_Welcome-premium-max", "w": 394, "h": 852}, "1:3822": {"name": "Onboarding-upsell-default", "w": 393, "h": 852}, "1:3882": {"name": "Assessments Upsell-free", "w": 393, "h": 852}, "1:3955": {"name": "Assessments Upsell-paid", "w": 393, "h": 852}, "1:4028": {"name": "11_Assessment Center -welcome", "w": 393, "h": 852}, "1:4058": {"name": "11_Assessment Center -welcome", "w": 393, "h": 852}, "1:4088": {"name": "student-home-free", "w": 852, "h": 393}, "1:4193": {"name": "03_Age Selection-selected", "w": 393, "h": 852}, "1:4307": {"name": "01_Static splash-universal Version 5", "w": 393, "h": 852}, "1:4313": {"name": "02_Animated transition 5", "w": 393, "h": 852}, "1:4320": {"name": "04_Benefits", "w": 393, "h": 852}, "10:85200": {"name": "03_Age Selection-selected", "w": 393, "h": 852}, "10:85314": {"name": "01_Static splash-universal Version 6", "w": 393, "h": 852}, "10:85320": {"name": "02_Animated transition 6", "w": 393, "h": 852}, "10:85327": {"name": "04_Benefits", "w": 393, "h": 852}, "1:4380": {"name": "student-home", "w": 852, "h": 393}};
+const ENTRY="1:4307";
+let cur=ENTRY,hist=[ENTRY],hnames=[FRAMES[ENTRY]?.name||''],autoTimer=null,debug=true;
+document.body.classList.add('debug');
+function resize(w,h){
+  const mw=Math.min(window.innerWidth-24,500),mh=window.innerHeight-130,s=Math.min(mw/w,mh/h);
+  const dv=document.getElementById('device'),wr=document.getElementById('device-wrap');
+  dv.style.width=w+'px';dv.style.height=h+'px';dv.style.borderRadius=(w>h?20:44)+'px';
+  wr.style.width=Math.round(w*s)+'px';wr.style.height=Math.round(h*s)+'px';wr.style.transform=`scale(${s})`;
+}
+function go(fid){
+  if(!FRAMES[fid]){toast('Unknown: '+fid);return;}
+  clearTimeout(autoTimer);
+  document.querySelector('.screen.active')?.classList.remove('active');
+  const el=document.querySelector(`.screen[data-id="${fid}"]`);
+  if(!el){toast('Missing: '+fid);return;}
+  el.classList.add('active');
+  const f=FRAMES[fid];resize(f.w,f.h);
+  if(fid!==cur){hist.push(fid);hnames.push(f.name);}
+  cur=fid;document.getElementById('frame-label').textContent=f.name;renderBC();
+  if(el.dataset.auto) autoTimer=setTimeout(()=>go(el.dataset.auto),parseInt(el.dataset.ms||2000));
+}
+function handleToggle(el){
+  el.dataset.toggled=String(el.dataset.toggled!=='true');
+}
+function renderBC(){
+  const bc=document.getElementById('bc');bc.innerHTML='';
+  const trail=hist.slice(-8),names=hnames.slice(-8);
+  trail.forEach((fid,i)=>{
+    if(i>0){const s=document.createElement('span');s.className='sep';s.textContent='>';bc.appendChild(s);}
+    const c=document.createElement('span');c.className='crumb'+(i===trail.length-1?' cur':'');c.textContent=names[i];
+    const idx=hist.length-trail.length+i;
+    c.onclick=()=>{hist=hist.slice(0,idx+1);hnames=hnames.slice(0,idx+1);cur=fid;
+      go(fid);hist.pop();hnames.pop();hist.push(fid);hnames.push(FRAMES[fid]?.name||'');};
+    bc.appendChild(c);
+  });
+}
+function goBack(){
+  if(hist.length<=1){toast('Already at start');return;}
+  hist.pop();hnames.pop();const prev=hist[hist.length-1];
+  clearTimeout(autoTimer);cur=prev;
+  document.querySelector('.screen.active')?.classList.remove('active');
+  const el=document.querySelector(`.screen[data-id="${prev}"]`);
+  if(el){el.classList.add('active');const f=FRAMES[prev];resize(f.w,f.h);document.getElementById('frame-label').textContent=f.name;renderBC();}
+}
+function restart(){
+  clearTimeout(autoTimer);
+  document.querySelectorAll('.hs.toggle').forEach(t=>t.dataset.toggled='false');
+  hist=[ENTRY];hnames=[FRAMES[ENTRY]?.name||''];cur=ENTRY;
+  go(ENTRY);hist=[ENTRY];hnames=[FRAMES[ENTRY]?.name||''];
+}
+function toggleDebug(){
+  debug=!debug;document.body.classList.toggle('debug',debug);
+  const btn=document.getElementById('dbgBtn');btn.textContent=debug?'Hide Hotspots':'Show Hotspots';btn.classList.toggle('on',debug);
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+window.addEventListener('load',()=>{
+  const missing=Object.keys(FRAMES).filter(f=>!document.querySelector(`.screen[data-id="${f}"]`));
+  if(missing.length) console.error('MISSING SCREENS:',missing);
+  else console.log('OK 34 screens | 69 nav hotspots | 28 toggles | 8 auto-advances');
+});
+go(ENTRY);hist=[ENTRY];hnames=[FRAMES[ENTRY]?.name||''];
+</script>
+</body>
+</html>
