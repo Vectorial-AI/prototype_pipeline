@@ -25,7 +25,7 @@ import asyncio, io, json, os, sys, time, zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -315,20 +315,42 @@ async def process(req: ProcessRequest):
 
 
 @app.post("/upload-html", response_model=UploadHTMLResponse)
-async def upload_html(file: UploadFile = File(...)):
+async def upload_html(
+    file: UploadFile | None = File(default=None),
+    blob_url: str | None = Form(default=None),
+):
     """
-    Direct HTML upload:
-      Accepts a single .html file, deploys it as-is to a new Netlify site,
-      and returns the live URL — no Figma processing involved.
+    Direct HTML deploy — no Figma processing.
+    Supply exactly one of:
+      • file     — multipart .html file upload
+      • blob_url — Vercel Blob URL that returns an .html file when downloaded
+    Returns the live Netlify URL.
     """
     import tempfile
 
-    if not file.filename or not file.filename.lower().endswith(".html"):
-        raise HTTPException(400, "Only .html files are accepted")
+    if file is None and not blob_url:
+        raise HTTPException(400, "Provide either a file upload or a blob_url")
+    if file is not None and blob_url:
+        raise HTTPException(400, "Provide only one of file or blob_url, not both")
 
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(400, "Uploaded file is empty")
+    if file is not None:
+        if not file.filename or not file.filename.lower().endswith(".html"):
+            raise HTTPException(400, "Only .html files are accepted")
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(400, "Uploaded file is empty")
+    else:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            try:
+                r = await client.get(blob_url)
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(400, f"Blob download failed ({e.response.status_code}): {blob_url}")
+            except httpx.RequestError as e:
+                raise HTTPException(400, f"Blob download error: {e}")
+        contents = r.content
+        if not contents:
+            raise HTTPException(400, "File at blob_url is empty")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = os.path.join(tmpdir, "output")
