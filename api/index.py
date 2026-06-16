@@ -167,7 +167,14 @@ async def _deploy_to_netlify(output_dir: str) -> dict:
             raise HTTPException(502, f"Netlify site creation failed ({r.status_code}): {r.text}")
         site = r.json()
         site_id: str = site["id"]
-        subdomain: str = site["subdomain"]
+        # Netlify API returns 'subdomain', 'name', or 'default_domain' depending on version
+        default_domain: str = site.get("default_domain", "")
+        subdomain: str = (
+            site.get("subdomain")
+            or site.get("name")
+            or default_domain.replace(".netlify.app", "")
+            or site_id
+        )
 
         # 2. Zip output and deploy
         loop = asyncio.get_event_loop()
@@ -204,8 +211,14 @@ async def _deploy_to_netlify(output_dir: str) -> dict:
         else:
             raise HTTPException(504, "Netlify deploy timed out after 2 minutes")
 
+    site_url = (
+        payload.get("ssl_url")
+        or payload.get("url")
+        or (f"https://{default_domain}" if default_domain else None)
+        or f"https://{subdomain}.netlify.app"
+    )
     return {
-        "url": f"https://{subdomain}.netlify.app",
+        "url": site_url,
         "site_id": site_id,
         "deploy_id": deploy_id,
     }
