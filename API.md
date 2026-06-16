@@ -82,7 +82,7 @@ Full Figma → prototype pipeline. Give it a Figma URL and token — it fetches 
 
 ### 3. `POST /upload-html`
 
-Direct HTML deploy — bypasses all Figma processing. Send a ready-made `.html` file (either as a direct upload or a Blob URL) and get back a live Netlify URL.
+Direct deploy — bypasses all Figma processing. Send a **folder zip** (containing at least one HTML file + any assets) or a single `.html` file, and get back a live Netlify URL.
 
 **Request**
 
@@ -92,35 +92,48 @@ Supply **exactly one** of the following form fields:
 
 | Field | Type | Description |
 |---|---|---|
-| `file` | `file` | A `.html` file uploaded directly |
-| `blob_url` | `string` | Vercel Blob URL that points to an `.html` file |
+| `file` | `file` | A `.zip` folder archive (≥1 HTML file inside) **or** a single `.html` file |
+| `blob_url` | `string` | Vercel Blob URL pointing to a `.zip` folder archive **or** a single `.html` file |
 
-**Example — file upload**
+**Zip format rules**
+- The zip must contain at least one `.html` file anywhere inside it.
+- All linked assets (CSS, JS, images, etc.) must be included in the zip at the correct relative paths.
+- If the zip wraps everything in a single top-level subfolder (e.g. `my-site/index.html`), that folder is automatically unwrapped so Netlify serves `index.html` at the root.
+- Netlify will serve `index.html` at the root as the entry point.
+
+**Example — zip folder via blob URL**
+```bash
+curl -X POST https://prototype-pipeline.vercel.app/upload-html \
+  -F "blob_url=https://abc123.public.blob.vercel-storage.com/my-site.zip"
+```
+
+**Example — zip folder direct upload**
+```bash
+curl -X POST https://prototype-pipeline.vercel.app/upload-html \
+  -F "file=@my-site.zip"
+```
+
+**Example — single HTML file (legacy)**
 ```bash
 curl -X POST https://prototype-pipeline.vercel.app/upload-html \
   -F "file=@my_prototype.html"
 ```
 
-**Example — blob URL**
-```bash
-curl -X POST https://prototype-pipeline.vercel.app/upload-html \
-  -F "blob_url=https://abc123.public.blob.vercel-storage.com/my_prototype.html"
-```
-
-**Example — JavaScript (fetch)**
+**Example — JavaScript (fetch) with zip blob URL**
 ```js
-// File upload
 const form = new FormData();
-form.append("file", htmlFileBlob, "prototype.html");
+form.append("blob_url", "https://abc123.public.blob.vercel-storage.com/my-site.zip");
 const res = await fetch("https://prototype-pipeline.vercel.app/upload-html", {
   method: "POST",
   body: form,
 });
 const { url } = await res.json();
+```
 
-// Blob URL
+**Example — JavaScript (fetch) with zip file upload**
+```js
 const form = new FormData();
-form.append("blob_url", "https://abc123.public.blob.vercel-storage.com/my.html");
+form.append("file", zipFileBlob, "my-site.zip");
 const res = await fetch("https://prototype-pipeline.vercel.app/upload-html", {
   method: "POST",
   body: form,
@@ -139,7 +152,7 @@ const { url } = await res.json();
 
 | Field | Type | Description |
 |---|---|---|
-| `url` | `string` | Live Netlify URL of the deployed prototype |
+| `url` | `string` | Live Netlify URL of the deployed site |
 | `site_id` | `string` | Netlify site ID |
 | `deploy_id` | `string` | Netlify deploy ID |
 
@@ -147,7 +160,7 @@ const { url } = await res.json();
 
 | Status | When |
 |---|---|
-| `400` | Neither or both fields supplied; non-`.html` file; empty file; blob download failed |
+| `400` | Neither or both fields supplied; unsupported file type; empty file; zip contains no HTML; zip has unsafe paths; blob download failed |
 | `502` | Netlify site creation or deploy failed |
 | `504` | Netlify deploy timed out (> 2 min) |
 

@@ -21,7 +21,7 @@ Environment variables (loaded from .env automatically):
   FIGMA_PERSONAL_ACCESS_TOKEN← optional fallback when not supplied in request body
 """
 
-import asyncio, io, json, os, sys, time, zipfile
+import asyncio, io, json, os, shutil, sys, time, zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -258,16 +258,60 @@ async def process(req: ProcessRequest):
     )
 
 
+def _extract_zip_to_dir(contents: bytes, output_dir: str) -> None:
+    """
+    Extract a zip into output_dir.
+    • Rejects any entry that would escape the output directory (zip-slip).
+    • If the zip contains exactly one top-level folder and nothing else,
+      the contents of that folder are moved up so Netlify can find index.html
+      at the root level.
+    """
+    real_output = os.path.realpath(output_dir)
+    try:
+        with zipfile.ZipFile(io.BytesIO(contents)) as zf:
+            for member in zf.namelist():
+                dest = os.path.realpath(os.path.join(real_output, member))
+                if not dest.startswith(real_output + os.sep) and dest != real_output:
+                    raise HTTPException(400, "Zip contains unsafe paths (zip-slip detected)")
+            zf.extractall(output_dir)
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "The provided file is not a valid zip archive")
+
+    # Unwrap a single top-level folder so index.html ends up at the root
+    entries = os.listdir(output_dir)
+    if len(entries) == 1 and os.path.isdir(os.path.join(output_dir, entries[0])):
+        inner = os.path.join(output_dir, entries[0])
+        for item in os.listdir(inner):
+            shutil.move(os.path.join(inner, item), output_dir)
+        os.rmdir(inner)
+
+
+def _find_html_files(directory: str) -> list[str]:
+    found = []
+    for root, _, files in os.walk(directory):
+        for fname in files:
+            if fname.lower().endswith(".html"):
+                found.append(os.path.join(root, fname))
+    return found
+
+
 @app.post("/upload-html", response_model=UploadHTMLResponse)
 async def upload_html(
     file: UploadFile | None = File(default=None),
     blob_url: str | None = Form(default=None),
 ):
     """
-    Direct HTML deploy — no Figma processing.
+    Deploy a folder (zip archive) or a single HTML file to Netlify — no Figma processing.
+
     Supply exactly one of:
-      • file     — multipart .html file upload
-      • blob_url — Vercel Blob URL that returns an .html file when downloaded
+      • file     — multipart upload: a .zip containing a folder with ≥1 HTML file,
+                   or a single .html file
+      • blob_url — Vercel Blob URL pointing to a .zip folder archive or a single .html file
+
+    The zip should contain your complete site folder (HTML + any linked assets).
+    Netlify will serve index.html at the root; if your zip wraps everything in one
+    top-level subfolder it will be automatically unwrapped.
+
     Returns the live Netlify URL.
     """
     import tempfile
@@ -278,11 +322,18 @@ async def upload_html(
         raise HTTPException(400, "Provide only one of file or blob_url, not both")
 
     if file is not None:
-        if not file.filename or not file.filename.lower().endswith(".html"):
-            raise HTTPException(400, "Only .html files are accepted")
+        if not file.filename:
+            raise HTTPException(400, "Uploaded file has no filename")
         contents = await file.read()
         if not contents:
             raise HTTPException(400, "Uploaded file is empty")
+        fname_lower = file.filename.lower()
+        if fname_lower.endswith(".zip"):
+            is_zip = True
+        elif fname_lower.endswith(".html"):
+            is_zip = False
+        else:
+            raise HTTPException(400, "Only .zip (folder archive) or .html files are accepted")
     else:
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
@@ -295,13 +346,30 @@ async def upload_html(
         contents = r.content
         if not contents:
             raise HTTPException(400, "File at blob_url is empty")
+        # Auto-detect: check URL extension first, then sniff the magic bytes
+        url_path = blob_url.lower().split("?")[0]
+        if url_path.endswith(".zip") or zipfile.is_zipfile(io.BytesIO(contents)):
+            is_zip = True
+        elif url_path.endswith(".html"):
+            is_zip = False
+        else:
+            # Last resort: treat as HTML
+            is_zip = False
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = os.path.join(tmpdir, "output")
         os.makedirs(output_dir, exist_ok=True)
 
-        with open(os.path.join(output_dir, "index.html"), "wb") as f:
-            f.write(contents)
+        if is_zip:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(_executor, _extract_zip_to_dir, contents, output_dir)
+
+            html_files = _find_html_files(output_dir)
+            if not html_files:
+                raise HTTPException(400, "Zip must contain at least one .html file")
+        else:
+            with open(os.path.join(output_dir, "index.html"), "wb") as f:
+                f.write(contents)
 
         deploy_info = await _deploy_to_netlify(output_dir)
 
