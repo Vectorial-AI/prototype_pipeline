@@ -34,11 +34,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from figma_to_prototype import (
     load_env,
+    extract_file_key,
+    fetch_figma_json,
     extract_frames,
     extract_interactions,
     detect_entry_frame,
     download_images,
-    use_local_images,
     build_html,
     validate,
 )
@@ -62,15 +63,11 @@ _executor = ThreadPoolExecutor(max_workers=4)
 
 
 class ProcessRequest(BaseModel):
-    blob_url: str
-    """Vercel Blob URL that returns a zip file when downloaded."""
+    figma_url: str
+    """Full Figma design/prototype URL, e.g. https://www.figma.com/design/ABC123/Name"""
 
     figma_token: str = ""
-    """Figma personal access token — used only when the zip has no images/ folder.
-       Falls back to FIGMA_PERSONAL_ACCESS_TOKEN env var if omitted."""
-
-    file_key: str = ""
-    """Figma file key — required when downloading images from Figma API."""
+    """Figma personal access token. Falls back to FIGMA_PERSONAL_ACCESS_TOKEN env var if omitted."""
 
 
 
@@ -93,50 +90,24 @@ class UploadHTMLResponse(BaseModel):
 # ── Pipeline helpers (sync, run in thread pool) ───────────────────────────────
 
 
-def _find_figma_json(root: str) -> str:
-    """Walk extracted zip to find the first JSON that has a 'document' key."""
-    for dirpath, _, filenames in os.walk(root):
-        for fn in sorted(filenames):
-            if not fn.endswith(".json"):
-                continue
-            full = os.path.join(dirpath, fn)
-            try:
-                with open(full, encoding="utf-8") as f:
-                    d = json.load(f)
-                if "document" in d:
-                    return full
-            except Exception:
-                pass
-    raise FileNotFoundError("No Figma JSON (with a 'document' key) found in the zip")
-
-
-def _run_pipeline(
-    figma_json_path: str,
-    images_src_dir: str | None,
-    output_dir: str,
+def _fetch_and_run_pipeline(
+    figma_url: str,
     figma_token: str,
-    file_key: str,
+    output_dir: str,
 ) -> dict:
-    """Core pipeline: JSON → HTML prototype.  Returns stats dict."""
-    with open(figma_json_path, encoding="utf-8") as f:
-        figma_data = json.load(f)
+    """Fetch Figma JSON + images, build HTML prototype. Returns stats dict."""
+    file_key = extract_file_key(figma_url)
+    figma_data = fetch_figma_json(file_key, figma_token)
 
     frames = extract_frames(figma_data)
     if not frames:
-        raise ValueError("No frames found in the Figma JSON")
+        raise ValueError("No frames found in the Figma file")
 
     hotspots, toggles, timeouts = extract_interactions(figma_data, set(frames.keys()))
     entry_id = detect_entry_frame(frames, hotspots)
 
     img_dir = os.path.join(output_dir, "images")
-
-    has_local_images = bool(images_src_dir and os.path.isdir(images_src_dir))
-    if has_local_images:
-        image_map = use_local_images(frames.keys(), images_src_dir, img_dir)
-    elif figma_token and file_key:
-        image_map = download_images(frames.keys(), file_key, figma_token, img_dir)
-    else:
-        image_map = {}
+    image_map = download_images(frames.keys(), file_key, figma_token, img_dir)
 
     html = build_html(frames, hotspots, toggles, timeouts, image_map, entry_id)
     os.makedirs(output_dir, exist_ok=True)
@@ -247,63 +218,36 @@ async def _deploy_to_netlify(output_dir: str) -> dict:
 async def process(req: ProcessRequest):
     """
     Full pipeline:
-      blob_url (zip) → download → extract → build prototype → deploy to Netlify
-    Returns the live Netlify URL plus build stats.
+      figma_url + figma_token → fetch JSON from Figma API → download frame images
+      → build HTML prototype → deploy to Netlify → return live URL + stats
     """
     import tempfile
 
-    # Resolve figma token: request body > env var
     figma_token = req.figma_token or os.environ.get("FIGMA_PERSONAL_ACCESS_TOKEN", "")
+    if not figma_token:
+        raise HTTPException(400, "figma_token is required (or set FIGMA_PERSONAL_ACCESS_TOKEN env var)")
+
+    try:
+        extract_file_key(req.figma_url)  # validate URL format early
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     with tempfile.TemporaryDirectory() as tmpdir:
-
-        # ── Step 1: Download zip from Vercel Blob ──────────────────────────────
-        zip_path = os.path.join(tmpdir, "input.zip")
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            try:
-                r = await client.get(req.blob_url)
-                r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                raise HTTPException(400, f"Blob download failed ({e.response.status_code}): {req.blob_url}")
-            except httpx.RequestError as e:
-                raise HTTPException(400, f"Blob download error: {e}")
-        with open(zip_path, "wb") as f:
-            f.write(r.content)
-
-        # ── Step 2: Extract zip ────────────────────────────────────────────────
-        input_dir = os.path.join(tmpdir, "input")
-        try:
-            with zipfile.ZipFile(zip_path, "r") as z:
-                z.extractall(input_dir)
-        except zipfile.BadZipFile:
-            raise HTTPException(400, "The file at blob_url is not a valid zip archive")
-
-        # ── Step 3: Locate Figma JSON ──────────────────────────────────────────
-        try:
-            figma_json_path = _find_figma_json(input_dir)
-        except FileNotFoundError as e:
-            raise HTTPException(422, str(e))
-
-        # images/ lives next to the JSON (standard zip layout)
-        images_candidate = os.path.join(os.path.dirname(figma_json_path), "images")
-
-        # ── Step 4: Run pipeline in thread pool (CPU-bound) ────────────────────
         output_dir = os.path.join(tmpdir, "output")
         loop = asyncio.get_event_loop()
         try:
             stats = await loop.run_in_executor(
                 _executor,
-                _run_pipeline,
-                figma_json_path,
-                images_candidate,
-                output_dir,
+                _fetch_and_run_pipeline,
+                req.figma_url,
                 figma_token,
-                req.file_key,
+                output_dir,
             )
         except (ValueError, FileNotFoundError) as e:
             raise HTTPException(422, str(e))
+        except RuntimeError as e:
+            raise HTTPException(502, str(e))
 
-        # ── Step 5: Deploy to Netlify ──────────────────────────────────────────
         deploy_info = await _deploy_to_netlify(output_dir)
 
     return ProcessResponse(
